@@ -2395,6 +2395,7 @@ bool CDVDPlayer::HasVideo() const
   return m_HasVideo;
 }
 
+
 bool CDVDPlayer::HasAudio() const
 {
   return m_HasAudio;
