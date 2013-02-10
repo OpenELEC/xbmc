@@ -282,6 +282,10 @@ void OMXPlayerVideo::Output(int iGroupId, double pts, bool bDropPacket)
   if (m_nextOverlay != DVD_NOPTS_VALUE)
     media_pts = m_nextOverlay;
 
+  int buffer = g_renderManager.WaitForBuffer(m_bStop, 0);
+  if (buffer < 0)
+    return;
+
   m_nextOverlay = NextOverlay(media_pts);
 
   ProcessOverlays(iGroupId, media_pts);
@@ -699,7 +703,7 @@ void OMXPlayerVideo::ResolutionUpdateCallBack(uint32_t width, uint32_t height, f
 
   if(!g_renderManager.Configure(width, height,
         iDisplayWidth, iDisplayHeight, m_fFrameRate, flags, format, 0,
-        m_hints.orientation))
+        m_hints.orientation, true))
   {
     CLog::Log(LOGERROR, "%s - failed to configure renderer", __FUNCTION__);
     return;
