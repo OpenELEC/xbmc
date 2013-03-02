@@ -465,6 +465,7 @@ void CDVDPlayerVideo::Process()
       m_speed = static_cast<CDVDMsgInt*>(pMsg)->m_value;
       if(m_speed == DVD_PLAYSPEED_PAUSE)
         m_iNrOfPicturesNotToSkip = 0;
+      g_renderManager.SetSpeed(m_speed);
     }
     else if (pMsg->IsType(CDVDMsg::PLAYER_STARTED))
     {
@@ -1359,7 +1360,7 @@ int CDVDPlayerVideo::OutputPicture(const DVDVideoPicture* src, double pts)
   if (index < 0)
     return EOS_DROPPED;
 
-  g_renderManager.FlipPage(CThread::m_bStop, (iCurrentClock + iSleepTime) / DVD_TIME_BASE, -1, mDisplayField, m_speed);
+  g_renderManager.FlipPage(CThread::m_bStop, (iCurrentClock + iSleepTime) / DVD_TIME_BASE, -1, mDisplayField);
 
   return result;
 #else
