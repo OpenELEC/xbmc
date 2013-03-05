@@ -860,6 +860,14 @@ void CLinuxRendererGL::UpdateVideoFilter()
     m_scalingMethod = VS_SCALINGMETHOD_LINEAR;
   }
 
+  // no need to scale if source equals dest
+  bool scale = ((float)m_sourceHeight != m_destRect.Height()) ||
+               ((float)m_sourceWidth != m_destRect.Width());
+  if(!scale)
+  {
+    m_scalingMethod = VS_SCALINGMETHOD_LINEAR;
+  }
+
   if (m_pVideoFilterShader)
   {
     m_pVideoFilterShader->Free();
