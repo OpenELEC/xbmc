@@ -1067,18 +1067,18 @@ void CXBMCRenderManager::PrepareNextRender()
 
   // look ahead in the queue
   // if the next frame is already late, skip the one we are about to render
-  while (idx != m_iOutputRenderBuffer)
-  {
-    int idx_next = (idx + 1) % m_iNumRenderBuffers;
-    if (m_renderBuffers[idx_next].timestamp <= clocktime)
-    {
-      FlipRenderBuffer();
-      idx = GetNextRenderBufferIndex();
-      CLog::Log(LOGDEBUG,"%s - skip frame at render buffer index: %d", __FUNCTION__, idx);
-    }
-    else
-      break;
-  }
+//  while (idx != m_iOutputRenderBuffer)
+//  {
+//    int idx_next = (idx + 1) % m_iNumRenderBuffers;
+//    if (m_renderBuffers[idx_next].timestamp <= clocktime)
+//    {
+//      FlipRenderBuffer();
+//      idx = GetNextRenderBufferIndex();
+//      CLog::Log(LOGDEBUG,"%s - skip frame at render buffer index: %d", __FUNCTION__, idx);
+//    }
+//    else
+//      break;
+//  }
 
   double presenttime = m_renderBuffers[idx].timestamp;
 
