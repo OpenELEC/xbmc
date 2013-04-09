@@ -111,6 +111,7 @@ void CGUIDialogVideoSettings::CreateSettings()
     entries.push_back(make_pair(VS_INTERLACEMETHOD_DXVA_BEST                  , 16321));
     entries.push_back(make_pair(VS_INTERLACEMETHOD_AUTO_ION                   , 16325));
     entries.push_back(make_pair(VS_INTERLACEMETHOD_XVBA                       , 16326));
+    entries.push_back(make_pair(VS_INTERLACEMETHOD_VAAPI_AUTO                 , 16327));
 
     /* remove unsupported methods */
     for(vector<pair<int, int> >::iterator it = entries.begin(); it != entries.end();)
