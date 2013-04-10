@@ -2960,6 +2960,9 @@
     <ClCompile Include="..\..\xbmc\peripherals\bus\virtual\PeripheralBusCEC.cpp">
       <Filter>peripherals\bus</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\xbmc\cores\dvdplayer\DVDDemuxers\DVDDemuxCDDA.cpp">
+      <Filter>cores\dvdplayer\DVDDemuxers</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\xbmc\win32\pch.h">
@@ -5778,6 +5781,9 @@
     </ClInclude>
     <ClInclude Include="..\..\xbmc\peripherals\bus\virtual\PeripheralBusCEC.h">
       <Filter>peripherals\bus</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\xbmc\cores\dvdplayer\DVDDemuxers\DVDDemuxCDDA.h">
+      <Filter>cores\dvdplayer\DVDDemuxers</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
