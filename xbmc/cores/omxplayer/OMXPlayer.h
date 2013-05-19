@@ -1,6 +1,7 @@
 #pragma once
+
 /*
- *      Copyright (C) 2011-2012 Team XBMC
+ *      Copyright (C) 2005-2012 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -19,21 +20,12 @@
  *
  */
 
-#if defined(HAVE_CONFIG_H) && !defined(TARGET_WINDOWS)
-#include "config.h"
-#define DECLARE_UNUSED(a,b) a __attribute__((unused)) b;
-#endif
-
-#include <semaphore.h>
-#include <deque>
-
-#include "FileItem.h"
 #include "cores/IPlayer.h"
-#include "cores/dvdplayer/IDVDPlayer.h"
-#include "dialogs/GUIDialogBusy.h"
 #include "threads/Thread.h"
-#include "threads/SingleLock.h"
 
+#include "cores/dvdplayer/IDVDPlayer.h"
+
+#include "DVDMessageQueue.h"
 #include "OMXCore.h"
 #include "OMXClock.h"
 #include "OMXPlayerAudio.h"
@@ -41,31 +33,31 @@
 #include "DVDPlayerSubtitle.h"
 #include "DVDPlayerTeletext.h"
 
+//#include "DVDChapterReader.h"
+#include "DVDSubtitles/DVDFactorySubtitle.h"
 #include "utils/BitstreamStats.h"
 
 #include "linux/DllBCM.h"
 #include "Edl.h"
+#include "FileItem.h"
+#include "threads/SingleLock.h"
 
-#define MAX_CHAPTERS 64
-
-#define DVDPLAYER_AUDIO    1
-#define DVDPLAYER_VIDEO    2
-#define DVDPLAYER_SUBTITLE 3
-#define DVDPLAYER_TELETEXT 4
-
-#define DVDSTATE_NORMAL           0x00000001 // normal dvd state
-#define DVDSTATE_STILL            0x00000002 // currently displaying a still frame
-#define DVDSTATE_WAIT             0x00000003 // waiting for demuxer read error
-#define DVDSTATE_SEEK             0x00000004 // we are finishing a seek request
+class CDVDInputStream;
 
 class COMXPlayer;
 class OMXPlayerVideo;
 class OMXPlayerAudio;
+class CStreamInfo;
 
 namespace PVR
 {
   class CPVRChannel;
 }
+
+#define DVDSTATE_NORMAL           0x00000001 // normal dvd state
+#define DVDSTATE_STILL            0x00000002 // currently displaying a still frame
+#define DVDSTATE_WAIT             0x00000003 // waiting for demuxer read error
+#define DVDSTATE_SEEK             0x00000004 // we are finishing a seek request
 
 class COMXCurrentStream
 {
@@ -166,83 +158,48 @@ public:
 };
 
 
+#define DVDPLAYER_AUDIO    1
+#define DVDPLAYER_VIDEO    2
+#define DVDPLAYER_SUBTITLE 3
+#define DVDPLAYER_TELETEXT 4
+
 class COMXPlayer : public IPlayer, public CThread, public IDVDPlayer
 {
 public:
-
   COMXPlayer(IPlayerCallback &callback);
   virtual ~COMXPlayer();
   
-  virtual void RegisterAudioCallback(IAudioCallback* pCallback) { m_player_audio.RegisterAudioCallback(pCallback); };
-  virtual void UnRegisterAudioCallback()                        { m_player_audio.UnRegisterAudioCallback();        };
-
-  virtual bool  IsValidStream(COMXCurrentStream& stream);
-  virtual bool  IsBetterStream(COMXCurrentStream& current, CDemuxStream* stream);
-  virtual bool  CheckDelayedChannelEntry(void);
-  virtual bool  ReadPacket(DemuxPacket*& packet, CDemuxStream*& stream);
-  virtual bool  CloseAudioStream(bool bWaitForBuffers);
-  virtual bool  CloseVideoStream(bool bWaitForBuffers);
-  virtual bool  CloseSubtitleStream(bool bKeepOverlays);
-  virtual bool  CloseTeletextStream(bool bWaitForBuffers);
-  virtual bool  OpenAudioStream(int iStream, int source, bool reset = true);
-  virtual bool  OpenVideoStream(int iStream, int source, bool reset = true);
-  virtual bool  OpenSubtitleStream(int iStream, int source); 
-  virtual bool  OpenTeletextStream(int iStream, int source);
-  virtual void  OpenDefaultStreams(bool reset = true);
-  virtual bool  OpenDemuxStream();
-  virtual bool  OpenInputStream();
-  virtual bool  CheckPlayerInit(COMXCurrentStream& current, unsigned int source);
-  virtual void  UpdateCorrection(DemuxPacket* pkt, double correction);
-  virtual void  UpdateTimestamps(COMXCurrentStream& current, DemuxPacket* pPacket);
-  virtual void  UpdateLimits(double& minimum, double& maximum, double dts);
-  virtual bool  CheckSceneSkip(COMXCurrentStream& current);
-  virtual void  CheckAutoSceneSkip();
-  virtual void  CheckContinuity(COMXCurrentStream& current, DemuxPacket* pPacket);
-  virtual void  ProcessAudioData(CDemuxStream* pStream, DemuxPacket* pPacket);
-  virtual void  ProcessVideoData(CDemuxStream* pStream, DemuxPacket* pPacket);
-  virtual void  ProcessSubData(CDemuxStream* pStream, DemuxPacket* pPacket);
-  virtual void  ProcessTeletextData(CDemuxStream* pStream, DemuxPacket* pPacket);
-  virtual void  ProcessPacket(CDemuxStream* pStream, DemuxPacket* pPacket);
-  virtual void  SynchronizeDemuxer(unsigned int timeout);
-  virtual void  SynchronizePlayers(unsigned int sources);
-  virtual void  SendPlayerMessage(CDVDMsg* pMsg, unsigned int target);
-  virtual void  HandleMessages();
-
   virtual bool  OpenFile(const CFileItem &file, const CPlayerOptions &options);
-  virtual bool  QueueNextFile(const CFileItem &file)             {return false;}
-  virtual void  OnNothingToQueueNotify()                         {}
   virtual bool  CloseFile();
   virtual bool  IsPlaying() const;
-  virtual void  SetPlaySpeed(int speed);
-  int GetPlaySpeed()                                                { return m_playSpeed; }
   virtual void  Pause();
   virtual bool  IsPaused() const;
   virtual bool  HasVideo() const;
   virtual bool  HasAudio() const;
   virtual bool  IsPassthrough() const;
   virtual bool  CanSeek();
-  virtual void  Seek(bool bPlus = true, bool bLargeStep = false);
+  virtual void Seek(bool bPlus, bool bLargeStep);
   virtual bool  SeekScene(bool bPlus = true);
-  virtual void  SeekPercentage(float fPercent = 0.0f);
+  virtual void SeekPercentage(float iPercent);
   virtual float GetPercentage();
   virtual float GetCachePercentage();
 
-  virtual void  SetMute(bool bOnOff);
-  virtual bool  ControlsVolume() {return true;}
-  virtual void  SetVolume(float fVolume);
-  virtual void  SetDynamicRangeCompression(long drc)              {}
-  virtual void  GetAudioInfo(CStdString &strAudioInfo);
-  virtual void  GetVideoInfo(CStdString &strVideoInfo);
-  virtual void  GetGeneralInfo(CStdString &strVideoInfo);
-  virtual void  Update(bool bPauseDrawing);
-  virtual void  GetVideoRect(CRect& SrcRect, CRect& DestRect);
-  virtual void  GetVideoAspectRatio(float &fAR);
-  virtual void  UpdateApplication(double timeout);
-  virtual bool  CanRecord();
-  virtual bool  IsRecording();
-  virtual bool  CanPause();
-  virtual bool  Record(bool bOnOff);
-  virtual void  SetAVDelay(float fValue = 0.0f);
+  virtual void SetVolume(float fVolume);
+  virtual void SetMute(bool bOnOff);
+  virtual bool ControlsVolume() {return true;}
+  virtual void SetDynamicRangeCompression(long drc)              {}
+  virtual void GetAudioInfo(CStdString &strAudioInfo);
+  virtual void GetVideoInfo(CStdString &strVideoInfo);
+  virtual void GetGeneralInfo(CStdString &strVideoInfo);
+  virtual void Update(bool bPauseDrawing)                       {}
+  virtual void GetVideoRect(CRect& SrcRect, CRect& DestRect)    { g_renderManager.GetVideoRect(SrcRect, DestRect); }
+  virtual void GetVideoAspectRatio(float& fAR)                  { fAR = m_omxPlayerVideo.GetAspectRatio(); }
+
+  virtual bool CanRecord();
+  virtual bool IsRecording();
+  virtual bool CanPause();
+  virtual bool Record(bool bOnOff);
+  virtual void SetAVDelay(float fValue = 0.0f);
   virtual float GetAVDelay();
 
   virtual void  SetSubTitleDelay(float fValue = 0.0f);
@@ -271,28 +228,25 @@ public:
   virtual void  GetChapterName(CStdString& strChapterName);
   virtual int   SeekChapter(int iChapter);
 
-  virtual void  SeekTime(int64_t iTime = 0);
-  virtual int64_t GetTotalTimeInMsec();
+  virtual void SeekTime(int64_t iTime);
   virtual int64_t GetTime();
   virtual int64_t GetTotalTime();
-  virtual void  ToFFRW(int iSpeed = 0);
-  virtual int   GetAudioBitrate();
-  virtual int   GetVideoBitrate();
-  virtual int   GetSourceBitrate();
-  virtual int   GetChannels();
+  virtual void ToFFRW(int iSpeed);
+  virtual bool OnAction(const CAction &action);
+  virtual bool HasMenu();
+  virtual int GetAudioBitrate();
+  virtual int GetVideoBitrate();
+  virtual int GetSourceBitrate();
+  virtual int GetChannels();
   virtual CStdString GetAudioCodecName();
   virtual CStdString GetVideoCodecName();
   virtual int   GetPictureWidth();
   virtual int   GetPictureHeight();
   virtual bool  GetStreamDetails(CStreamDetails &details);
 
-  virtual bool  IsInMenu() const;
-  virtual bool  HasMenu();
-
   virtual bool  GetCurrentSubtitle(CStdString& strSubtitle);
-  //returns a state that is needed for resuming from a specific time
   virtual CStdString GetPlayerState();
-  virtual bool  SetPlayerState(CStdString state);
+  virtual bool SetPlayerState(CStdString state);
   
   virtual CStdString GetPlayingTitle();
 
@@ -308,30 +262,10 @@ public:
   , CACHESTATE_FLUSH    // temporary state player will choose startup between init or full
   };
 
-  int m_playSpeed;
-  struct SSpeedState
-  {
-    double lastpts;  // holds last display pts during ff/rw operations
-    double lasttime;
-  } m_SpeedState;
-
-  void    HandlePlaySpeed();
-  bool    GetCachingTimes(double& play_left, double& cache_left, double& file_offset);
-  bool    CheckStartCaching(COMXCurrentStream& current);
-  void    SetCaching(ECacheState state);
-  double  GetQueueTime();
-  virtual bool  IsCaching() const                                 { return m_caching == CACHESTATE_FULL; }
+  virtual bool  IsCaching() const                                 { return m_caching == CACHESTATE_FULL || m_caching == CACHESTATE_PVR; }
   virtual int   GetCacheLevel() const;
 
   virtual int  OnDVDNavResult(void* pData, int iMessage);
-  virtual bool OnAction(const CAction &action);
-
-  virtual void  GetRenderFeatures(std::vector<int> &renderFeatures);
-  virtual void  GetDeinterlaceMethods(std::vector<int> &deinterlaceMethods);
-  virtual void  GetDeinterlaceModes(std::vector<int> &deinterlaceModes);
-  virtual void  GetScalingMethods(std::vector<int> &scalingMethods);
-  virtual void  GetAudioCapabilities(std::vector<int> &audioCaps);
-  virtual void  GetSubtitleCapabilities(std::vector<int> &subCaps);
 protected:
   friend class COMXSelectionStreams;
 
@@ -343,19 +277,115 @@ protected:
 
   virtual void  OnStartup();
   virtual void  OnExit();
-  bool WaitForPausedThumbJobs(int timeout_ms);
   virtual void  Process();
 
+  bool OpenAudioStream(int iStream, int source, bool reset = true);
+  bool OpenVideoStream(int iStream, int source, bool reset = true);
+  bool OpenSubtitleStream(int iStream, int source);
+  bool OpenTeletextStream(int iStream, int source);
+  bool CloseAudioStream(bool bWaitForBuffers);
+  bool CloseVideoStream(bool bWaitForBuffers);
+  bool CloseSubtitleStream(bool bKeepOverlays);
+  bool CloseTeletextStream(bool bWaitForBuffers);
+
+  void ProcessPacket(CDemuxStream* pStream, DemuxPacket* pPacket);
+  void ProcessAudioData(CDemuxStream* pStream, DemuxPacket* pPacket);
+  void ProcessVideoData(CDemuxStream* pStream, DemuxPacket* pPacket);
+  void ProcessSubData(CDemuxStream* pStream, DemuxPacket* pPacket);
+  void ProcessTeletextData(CDemuxStream* pStream, DemuxPacket* pPacket);
+
+  bool ShowPVRChannelInfo();
+
+  int  AddSubtitleFile(const std::string& filename, const std::string& subfilename = "", CDemuxStream::EFlags flags = CDemuxStream::FLAG_NONE);
+
+  /**
+   * one of the DVD_PLAYSPEED defines
+   */
+  void SetPlaySpeed(int iSpeed);
+  int GetPlaySpeed()                                                { return m_playSpeed; }
+  void    SetCaching(ECacheState state);
+
+  int64_t GetTotalTimeInMsec();
+
+  double  GetQueueTime();
+  bool    GetCachingTimes(double& play_left, double& cache_left, double& file_offset);
+
+
+  void FlushBuffers(bool queued, double pts = DVD_NOPTS_VALUE, bool accurate = true);
+
+
+  void  HandleMessages();
+  void    HandlePlaySpeed();
+  bool  IsInMenu() const;
+
+  void SynchronizePlayers(unsigned int sources);
+  void SynchronizeDemuxer(unsigned int timeout);
+  void CheckAutoSceneSkip();
+  void CheckContinuity(COMXCurrentStream& current, DemuxPacket* pPacket);
+  bool CheckSceneSkip(COMXCurrentStream& current);
+  bool CheckPlayerInit(COMXCurrentStream& current, unsigned int source);
+  bool CheckStartCaching(COMXCurrentStream& current);
+  void UpdateCorrection(DemuxPacket* pkt, double correction);
+  void UpdateTimestamps(COMXCurrentStream& current, DemuxPacket* pPacket);
+  void SendPlayerMessage(CDVDMsg* pMsg, unsigned int target);
+  bool ReadPacket(DemuxPacket*& packet, CDemuxStream*& stream);
+  bool IsValidStream(COMXCurrentStream& stream);
+  bool IsBetterStream(COMXCurrentStream& current, CDemuxStream* stream);
+  bool CheckDelayedChannelEntry(void);
+  bool OpenInputStream();
+  bool OpenDemuxStream();
+  void OpenDefaultStreams(bool reset = true);
+
+  void UpdateApplication(double timeout);
+  void UpdatePlayState(double timeout);
+  double m_UpdateApplication;
+
+  bool m_bAbortRequest;
+
   std::string           m_filename; // holds the actual filename
-  CDVDInputStream       *m_pInputStream;
-  CDVDDemux             *m_pDemuxer;
+  std::string  m_mimetype;  // hold a hint to what content file contains (mime type)
+  ECacheState  m_caching;
+  CFileItem    m_item;
+  unsigned int m_iChannelEntryTimeOut;
+
+
+  COMXCurrentStream m_CurrentAudio;
+  COMXCurrentStream m_CurrentVideo;
+  COMXCurrentStream m_CurrentSubtitle;
+  COMXCurrentStream m_CurrentTeletext;
+
+  COMXSelectionStreams m_SelectionStreams;
+
+  int m_playSpeed;
+  struct SSpeedState
+  {
+    double lastpts;  // holds last display pts during ff/rw operations
+    double lasttime;
+  } m_SpeedState;
+
+  int m_errorCount;
+  double m_offset_pts;
+
+  CDVDMessageQueue m_messenger;     // thread messenger
+
+  OMXPlayerVideo m_omxPlayerVideo; // video part
+  OMXPlayerAudio m_omxPlayerAudio; // audio part
+  CDVDPlayerSubtitle m_dvdPlayerSubtitle; // subtitle part
+  CDVDTeletextData m_dvdPlayerTeletext; // teletext part
+
+  OMXClock m_av_clock;                // master clock
+
+  float m_current_volume;
+  bool m_current_mute;
+  bool m_change_volume;
+
+  CDVDOverlayContainer m_overlayContainer;
+
+  CDVDInputStream* m_pInputStream;  // input stream for current playing file
+  CDVDDemux* m_pDemuxer;            // demuxer for current playing file
   CDVDDemux*            m_pSubtitleDemuxer;
-  COMXSelectionStreams  m_SelectionStreams;
-  std::string           m_mimetype;
-  COMXCurrentStream     m_CurrentAudio;
-  COMXCurrentStream     m_CurrentVideo;
-  COMXCurrentStream     m_CurrentSubtitle;
-  COMXCurrentStream     m_CurrentTeletext;
+
+  CStdString m_lastSub;
 
   struct SDVDInfo
   {
@@ -439,6 +469,9 @@ protected:
   } m_State;
   CCriticalSection m_StateSection;
 
+  CEvent m_ready;
+  CCriticalSection m_critStreamSection; // need to have this lock when switching streams (audio / video)
+
   CEdl m_Edl;
 
   struct SEdlAutoSkipMarkers {
@@ -460,45 +493,7 @@ protected:
 
   } m_EdlAutoSkipMarkers;
 
-  bool ShowPVRChannelInfo();
-
-  int  AddSubtitleFile(const std::string& filename, const std::string& subfilename = "", CDemuxStream::EFlags flags = CDemuxStream::FLAG_NONE);
-  virtual void UpdatePlayState(double timeout);
-
-  double m_UpdateApplication;
-
-  void RenderUpdateCallBack(const void *ctx, const CRect &SrcRect, const CRect &DestRect);
-
-private:
-  void FlushBuffers(bool queued, double pts = DVD_NOPTS_VALUE, bool accurate = true);
-
-  CCriticalSection        m_critStreamSection;
-
-  bool                    m_paused;
-  bool                    m_bAbortRequest;
-  CFileItem               m_item;
   CPlayerOptions          m_PlayerOptions;
-  unsigned int            m_iChannelEntryTimeOut;
-
-  std::string             m_lastSub;
-
-  double                  m_offset_pts;
-
-  CDVDMessageQueue        m_messenger;
-
-  OMXClock                m_av_clock;
-  OMXPlayerVideo          m_player_video;
-  OMXPlayerAudio          m_player_audio;
-  CDVDPlayerSubtitle      m_player_subtitle;
-  CDVDTeletextData        m_player_teletext;
-
-  CEvent                  m_ready;
-
-  float                   m_current_volume;
-  bool                    m_current_mute;
-  bool                    m_change_volume;
-  CDVDOverlayContainer    m_overlayContainer;
-  ECacheState             m_caching;
 
   bool m_HasVideo;
   bool m_HasAudio;
