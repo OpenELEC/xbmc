@@ -1065,21 +1065,6 @@ void CXBMCRenderManager::PrepareNextRender()
   double clocktime = GetPresentTime();
   double frametime = 1 / g_graphicsContext.GetFPS();
 
-  // look ahead in the queue
-  // if the next frame is already late, skip the one we are about to render
-//  while (idx != m_iOutputRenderBuffer)
-//  {
-//    int idx_next = (idx + 1) % m_iNumRenderBuffers;
-//    if (m_renderBuffers[idx_next].timestamp <= clocktime)
-//    {
-//      FlipRenderBuffer();
-//      idx = GetNextRenderBufferIndex();
-//      CLog::Log(LOGDEBUG,"%s - skip frame at render buffer index: %d", __FUNCTION__, idx);
-//    }
-//    else
-//      break;
-//  }
-
   double presenttime = m_renderBuffers[idx].timestamp;
 
   if(presenttime - clocktime > MAXPRESENTDELAY)
@@ -1136,6 +1121,13 @@ void CXBMCRenderManager::NotifyDisplayFlip()
   {
     int last = m_iDisplayedRenderBuffer;
     m_iDisplayedRenderBuffer = (m_iCurrentRenderBuffer + m_iNumRenderBuffers - 1) % m_iNumRenderBuffers;
+
+    // we have caught up with output so all buffers are re-usable
+    if (last != m_iDisplayedRenderBuffer
+        && m_iDisplayedRenderBuffer == m_iOutputRenderBuffer)
+    {
+      m_bAllRenderBuffersDisplayed = true;
+    }
 
     if (last != m_iDisplayedRenderBuffer
         && m_iDisplayedRenderBuffer != m_iCurrentRenderBuffer)
