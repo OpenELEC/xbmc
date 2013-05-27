@@ -775,7 +775,7 @@ IAEStream *CSoftAE::MakeStream(enum AEDataFormat dataFormat, unsigned int sample
     ASSERT(encodedSampleRate);
 
   CSingleLock streamLock(m_streamLock);
-  CSoftAEStream *stream = new CSoftAEStream(dataFormat, sampleRate, encodedSampleRate, channelLayout, options);
+  CSoftAEStream *stream = new CSoftAEStream(dataFormat, sampleRate, encodedSampleRate, channelLayout, options, m_streamLock);
   m_newStreams.push_back(stream);
   streamLock.Leave();
   // this is really needed here
