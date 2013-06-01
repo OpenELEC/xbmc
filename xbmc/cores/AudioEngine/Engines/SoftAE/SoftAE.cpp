@@ -1235,7 +1235,7 @@ unsigned int CSoftAE::WriteSink(CAEBuffer& src, int src_len, uint8_t *data, bool
 
     if (frames)
     {
-      m_buffer.Shift(NULL, src_len);
+      src.Shift(NULL, src_len);
       return frames;
     }
 
