@@ -48,8 +48,17 @@ CPictureThumbLoader::~CPictureThumbLoader()
 
 bool CPictureThumbLoader::LoadItem(CFileItem* pItem)
 {
-  if (pItem->m_bIsShareOrDrive) return true;
-  if (pItem->IsParentFolder()) return true;
+  bool result  = LoadItemCached(pItem);
+       result |= LoadItemLookup(pItem);
+
+  return result;
+}
+
+bool CPictureThumbLoader::LoadItemCached(CFileItem* pItem)
+{
+  if (pItem->m_bIsShareOrDrive
+  ||  pItem->IsParentFolder())
+    return false;
 
   if (pItem->HasArt("thumb") && m_regenerateThumbs)
   {
@@ -94,6 +103,11 @@ bool CPictureThumbLoader::LoadItem(CFileItem* pItem)
   }
   pItem->FillInDefaultIcon();
   return true;
+}
+
+bool CPictureThumbLoader::LoadItemLookup(CFileItem* pItem)
+{
+  return false;
 }
 
 void CPictureThumbLoader::OnJobComplete(unsigned int jobID, bool success, CJob* job)
