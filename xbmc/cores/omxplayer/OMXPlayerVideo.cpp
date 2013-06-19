@@ -276,7 +276,7 @@ void OMXPlayerVideo::Output(int iGroupId, double pts, bool bDropPacket)
 
   // we aim to submit subtitles 100ms early
   const double preroll = DVD_MSEC_TO_TIME(100);
-  double media_pts = m_av_clock->OMXMediaTime(false);
+  double media_pts = m_av_clock->OMXMediaTime();
 
   if (m_nextOverlay != DVD_NOPTS_VALUE && media_pts + preroll <= m_nextOverlay)
     return;
