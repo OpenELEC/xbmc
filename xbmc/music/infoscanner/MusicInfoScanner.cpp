@@ -836,7 +836,8 @@ void CMusicInfoScanner::FindArtForAlbums(VECALBUMS &albums, const CStdString &pa
   {
     // assign to folder thumb as well
     CFileItem albumItem(path, true);
-    CMusicThumbLoader::SetCachedImage(albumItem, "thumb", albumArt);
+    CMusicThumbLoader loader;
+    loader.SetCachedImage(albumItem, "thumb", albumArt);
   }
 }
 
