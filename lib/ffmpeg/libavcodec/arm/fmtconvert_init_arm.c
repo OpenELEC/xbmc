@@ -31,6 +31,8 @@ void ff_float_to_int16_interleave_neon(int16_t *, const float **, long, int);
 
 void ff_int32_to_float_fmul_scalar_vfp(float *dst, const int *src,
                                        float mul, int len);
+void ff_int32_to_float_fmul_scalar_array_vfp(FmtConvertContext *c, float *dst, const int *src,
+                                             float *mul, int len);
 
 void ff_float_to_int16_vfp(int16_t *dst, const float *src, long len);
 
@@ -38,6 +40,9 @@ void ff_fmt_convert_init_arm(FmtConvertContext *c, AVCodecContext *avctx)
 {
     if (HAVE_ARMVFP) {
         c->int32_to_float_fmul_scalar = ff_int32_to_float_fmul_scalar_vfp;
+        if (!HAVE_NEON) {
+            c->int32_to_float_fmul_scalar_array = ff_int32_to_float_fmul_scalar_array_vfp;
+        }
         if (HAVE_ARMV6) {
             c->float_to_int16 = ff_float_to_int16_vfp;
         }
