@@ -73,7 +73,7 @@ OMXPlayerAudio::OMXPlayerAudio(OMXClock *av_clock, CDVDMessageQueue& parent)
   m_speed         = DVD_PLAYSPEED_NORMAL;
   m_started       = false;
   m_stalled       = false;
-  m_audioClock    = 0;
+  m_audioClock    = DVD_NOPTS_VALUE;
   m_buffer_empty  = false;
   m_nChannels     = 0;
   m_DecoderOpen   = false;
@@ -140,7 +140,7 @@ void OMXPlayerAudio::OpenStream(CDVDStreamInfo &hints, COMXAudioCodecOMX *codec)
     m_hints.bitspersample = 16;
 
   m_speed           = DVD_PLAYSPEED_NORMAL;
-  m_audioClock      = 0;
+  m_audioClock      = DVD_NOPTS_VALUE;
   m_hw_decode       = false;
   m_silence         = false;
   m_started         = false;
@@ -414,6 +414,7 @@ void OMXPlayerAudio::Process()
       CDVDMsgGeneralResync* pMsgGeneralResync = (CDVDMsgGeneralResync*)pMsg;
       CLog::Log(LOGDEBUG, "COMXPlayerAudio - CDVDMsg::GENERAL_RESYNC(%f, %d)", m_audioClock, pMsgGeneralResync->m_clock);
       m_flush = false;
+      m_audioClock = DVD_NOPTS_VALUE;
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_RESET))
     {
@@ -426,6 +427,7 @@ void OMXPlayerAudio::Process()
       m_av_clock->OMXReset(false);
       m_av_clock->UnLock();
       m_started = false;
+      m_audioClock = DVD_NOPTS_VALUE;
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_FLUSH))
     {
@@ -440,6 +442,7 @@ void OMXPlayerAudio::Process()
 
       if (m_pAudioCodec)
         m_pAudioCodec->Reset();
+      m_audioClock = DVD_NOPTS_VALUE;
     }
     else if (pMsg->IsType(CDVDMsg::PLAYER_STARTED))
     {
