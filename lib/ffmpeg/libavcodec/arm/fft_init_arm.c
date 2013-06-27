@@ -25,6 +25,8 @@
 void ff_fft_permute_neon(FFTContext *s, FFTComplex *z);
 void ff_fft_calc_neon(FFTContext *s, FFTComplex *z);
 
+void ff_imdct_half_vfp(FFTContext *s, FFTSample *output, const FFTSample *input);
+
 void ff_imdct_calc_neon(FFTContext *s, FFTSample *output, const FFTSample *input);
 void ff_imdct_half_neon(FFTContext *s, FFTSample *output, const FFTSample *input);
 void ff_mdct_calc_neon(FFTContext *s, FFTSample *output, const FFTSample *input);
@@ -46,6 +48,10 @@ void ff_synth_filter_float_neon(FFTContext *imdct,
 av_cold void ff_fft_init_arm(FFTContext *s)
 {
     if (HAVE_NEON) {
+        if (HAVE_ARMVFP) {
+            s->imdct_half   = ff_imdct_half_vfp;
+        }
+
         s->fft_permute  = ff_fft_permute_neon;
         s->fft_calc     = ff_fft_calc_neon;
 #if CONFIG_MDCT
