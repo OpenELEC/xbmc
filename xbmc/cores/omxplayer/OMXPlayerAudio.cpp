@@ -42,6 +42,7 @@
 #include "utils/TimeUtils.h"
 
 #include "OMXPlayer.h"
+#include "linux/RBP.h"
 
 #include <iostream>
 #include <sstream>
@@ -79,7 +80,9 @@ OMXPlayerAudio::OMXPlayerAudio(OMXClock *av_clock, CDVDMessageQueue& parent)
   m_bad_state     = false;
   m_hints_current.Clear();
 
-  m_messageQueue.SetMaxDataSize(3 * 1024 * 1024);
+  bool small_mem = g_RBP.GetArmMem() < 256;
+  m_messageQueue.SetMaxDataSize((small_mem ? 3:6) * 1024 * 1024);
+
   m_messageQueue.SetMaxTimeSize(8.0);
   m_use_passthrough = false;
   m_passthrough = false;
