@@ -75,6 +75,7 @@ COMXVideo::COMXVideo()
   m_hdmi_clock_sync   = false;
   m_submitted_eos     = false;
   m_settings_changed  = false;
+  m_setStartTime      = false;
   m_transform         = OMX_DISPLAY_ROT0;
 }
 
@@ -336,6 +337,7 @@ bool COMXVideo::Open(CDVDStreamInfo &hints, OMXClock *clock, EDEINTERLACEMODE de
   OMX_ERRORTYPE omx_err   = OMX_ErrorNone;
   std::string decoder_name;
   m_settings_changed = false;
+  m_setStartTime = true;
 
   m_res_ctx           = NULL;
   m_res_callback      = NULL;
@@ -741,11 +743,11 @@ int COMXVideo::Decode(uint8_t *pData, int iSize, double pts)
       omx_buffer->nFlags = 0;
       omx_buffer->nOffset = 0;
 
-      if(m_av_clock->VideoStart())
+      if(m_setStartTime)
       {
         omx_buffer->nFlags |= OMX_BUFFERFLAG_STARTTIME;
         CLog::Log(LOGDEBUG, "OMXVideo::Decode VDec : setStartTime %f\n", (pts == DVD_NOPTS_VALUE ? 0.0 : pts) / DVD_TIME_BASE);
-        m_av_clock->VideoStart(false);
+        m_setStartTime = false;
       }
       if(pts == DVD_NOPTS_VALUE)
         omx_buffer->nFlags |= OMX_BUFFERFLAG_TIME_UNKNOWN;
@@ -811,6 +813,7 @@ void COMXVideo::Reset(void)
   if(!m_is_open)
     return;
 
+  m_setStartTime = true;
   m_omx_decoder.FlushInput();
   m_omx_tunnel_decoder.Flush();
 }
