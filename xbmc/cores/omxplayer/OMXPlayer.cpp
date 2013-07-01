@@ -485,18 +485,9 @@ bool COMXPlayer::OpenFile(const CFileItem &file, const CPlayerOptions &options)
     if(IsRunning())
       CloseFile();
 
-    if(!m_av_clock.OMXInitialize(&m_clock, false, false))
-    {
-      return false;
-    }
-    if(g_guiSettings.GetBool("videoplayer.adjustrefreshrate"))
-      m_av_clock.HDMIClockSync();
-    m_av_clock.OMXStateIdle();
-
     m_bAbortRequest = false;
 
     SetPlaySpeed(DVD_PLAYSPEED_NORMAL);
-    m_av_clock.OMXPause();
 
     m_State.Clear();
     m_UpdateApplication = 0;
@@ -1014,6 +1005,19 @@ void COMXPlayer::Process()
 
   // allow renderer to switch to fullscreen if requested
   m_omxPlayerVideo.EnableFullscreen(m_PlayerOptions.fullscreen);
+
+  if(!m_av_clock.OMXInitialize(&m_clock, false, false))
+  {
+    m_bAbortRequest = true;
+    return;
+  }
+  if(g_guiSettings.GetBool("videoplayer.adjustrefreshrate"))
+    m_av_clock.HDMIClockSync();
+  m_av_clock.OMXStateIdle();
+  m_av_clock.OMXStop();
+  m_av_clock.HasAudio(m_HasVideo);
+  m_av_clock.HasVideo(m_HasAudio);
+  m_av_clock.OMXPause();
 
   OpenDefaultStreams();
 
@@ -2479,6 +2483,14 @@ void COMXPlayer::HandleMessages()
           m_CurrentAudio.started = true;
         if(player == DVDPLAYER_VIDEO)
           m_CurrentVideo.started = true;
+
+        if ((player == DVDPLAYER_AUDIO || player == DVDPLAYER_VIDEO) && (!m_HasAudio || m_CurrentAudio.started) && (!m_HasVideo || m_CurrentVideo.started))
+        {
+          m_av_clock.HasAudio(m_HasAudio);
+          m_av_clock.HasVideo(m_HasVideo);
+          m_av_clock.OMXReset();
+        }
+
         CLog::Log(LOGDEBUG, "COMXPlayer::HandleMessages - player started %d", player);
       }
     }
@@ -3360,6 +3372,7 @@ void COMXPlayer::FlushBuffers(bool queued, double pts, bool accurate)
 
   CLog::Log(LOGNOTICE, "FlushBuffers: q:%d pts:%.0f a:%d", queued, pts, accurate);
 
+  m_av_clock.OMXStop();
   m_av_clock.OMXPause();
 
   if(accurate)

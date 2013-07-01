@@ -165,12 +165,7 @@ bool OMXPlayerVideo::CloseStream(bool bWaitForBuffers)
   m_speed         = DVD_PLAYSPEED_NORMAL;
   m_started       = false;
 
-  m_av_clock->Lock();
-  m_av_clock->OMXStop(false);
   m_omxVideo.Close();
-  m_av_clock->HasVideo(false);
-  m_av_clock->OMXReset(false);
-  m_av_clock->UnLock();
 
   if(m_DllBcmHost.IsLoaded())
     m_DllBcmHost.Unload();
@@ -367,11 +362,7 @@ void OMXPlayerVideo::Process()
     else if (pMsg->IsType(CDVDMsg::GENERAL_RESET))
     {
       CLog::Log(LOGDEBUG, "COMXPlayerVideo - CDVDMsg::GENERAL_RESET");
-      m_av_clock->Lock();
-      m_av_clock->OMXStop(false);
       m_omxVideo.Reset();
-      m_av_clock->OMXReset(false);
-      m_av_clock->UnLock();
       m_started = false;
       m_nextOverlay = DVD_NOPTS_VALUE;
       m_iCurrentPts = DVD_NOPTS_VALUE;
@@ -382,12 +373,8 @@ void OMXPlayerVideo::Process()
       m_stalled = true;
       m_started = false;
       m_nextOverlay = DVD_NOPTS_VALUE;
-      m_av_clock->Lock();
-      m_av_clock->OMXStop(false);
       m_iCurrentPts = DVD_NOPTS_VALUE;
       m_omxVideo.Reset();
-      m_av_clock->OMXReset(false);
-      m_av_clock->UnLock();
       m_flush = false;
     }
     else if (pMsg->IsType(CDVDMsg::PLAYER_SETSPEED))
@@ -516,10 +503,6 @@ bool OMXPlayerVideo::OpenDecoder()
   else
     m_fForcedAspectRatio = 0.0;
 
-
-  m_av_clock->Lock();
-  m_av_clock->OMXStop(false);
-
   bool bVideoDecoderOpen = m_omxVideo.Open(m_hints, m_av_clock, g_settings.m_currentVideoSettings.m_DeinterlaceMode, m_hdmi_clock_sync);
   m_omxVideo.RegisterResolutionUpdateCallBack((void *)this, ResolutionUpdateCallBack);
 
@@ -547,10 +530,6 @@ bool OMXPlayerVideo::OpenDecoder()
       m_av_clock->SetRefreshRate(m_fFrameRate);
   }
 
-  m_av_clock->OMXStateExecute(false);
-  m_av_clock->HasVideo(bVideoDecoderOpen);
-  m_av_clock->OMXReset(false);
-  m_av_clock->UnLock();
   // start from assuming all recent frames had valid pts
   m_history_valid_pts = ~0;
 
