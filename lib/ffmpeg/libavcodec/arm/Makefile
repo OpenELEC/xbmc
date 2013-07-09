@@ -37,6 +37,7 @@ OBJS-$(HAVE_ARMV6)                     += arm/dsputil_init_armv6.o      \
                                           $(ARMV6-OBJS-yes)
 
 VFP-OBJS-$(HAVE_ARMV6)                 += arm/dcadsp_vfp.o              \
+                                          arm/fft_vfp.o                 \
                                           arm/fmtconvert_vfp.o          \
                                           arm/mdct_vfp.o                \
                                           arm/synth_filter_vfp.o
