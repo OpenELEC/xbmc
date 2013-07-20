@@ -709,7 +709,6 @@ bool CWinEventsX11::ProcessShortcuts(XBMC_Event& event)
     switch(event.key.keysym.sym)
     {
       case XBMCK_TAB:  // ALT+TAB to minimize/hide
-        g_application.Minimize();
         return true;
 
       default:
