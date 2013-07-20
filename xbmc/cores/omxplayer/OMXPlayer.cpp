@@ -1183,7 +1183,7 @@ void COMXPlayer::Process()
         }
       }
     }
-    else if (not_accepts_data && (audio_fifo_low || video_fifo_low))
+    else if (0 && not_accepts_data && (audio_fifo_low || video_fifo_low))
     {
       CLog::Log(LOGDEBUG, "%s - Flush! M:%.6f-%.6f (A:%.6f V:%.6f) PEF:%d%d%d S:%.2f A:%.2f V:%.2f/T:%.2f (A:%d%d V:%d%d) A:%d%% V:%d%% (%.2f,%.2f)", __FUNCTION__,
         stamp*1e-6, m_av_clock.OMXClockAdjustment()*1e-6, audio_pts*1e-6, video_pts*1e-6, m_av_clock.OMXIsPaused(), bOmxSentEOFs, not_accepts_data, m_playSpeed * (1.0f/DVD_PLAYSPEED_NORMAL),
