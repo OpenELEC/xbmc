@@ -23,6 +23,8 @@
 
 #include "WinSystemEGL.h"
 #include "filesystem/SpecialProtocol.h"
+#include "guilib/IDirtyRegionSolver.h"
+#include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/GUISettings.h"
 #include "utils/log.h"
@@ -188,6 +190,14 @@ bool CWinSystemEGL::CreateWindow(RESOLUTION_INFO &res)
   {
     CLog::Log(LOGERROR, "%s: Could not bind to context",__FUNCTION__);
     return false;
+  }
+
+  // for the non-trivial dirty region modes, we need the EGL buffer to be preserved across updates
+  if (g_advancedSettings.m_guiAlgorithmDirtyRegions == DIRTYREGION_SOLVER_COST_REDUCTION ||
+      g_advancedSettings.m_guiAlgorithmDirtyRegions == DIRTYREGION_SOLVER_UNION)
+  {
+    if (!m_egl->SurfaceAttrib(m_display, m_surface, EGL_SWAP_BEHAVIOR, EGL_BUFFER_PRESERVED))
+      CLog::Log(LOGDEBUG, "%s: Could not set EGL_SWAP_BEHAVIOR",__FUNCTION__);
   }
 
   m_bWindowCreated = true;

@@ -62,6 +62,7 @@ public:
   bool SetVSync(EGLDisplay display, bool enable);
   bool IsExtSupported(const char* extension);
   bool GetConfigAttrib(EGLDisplay display, EGLConfig config, EGLint attribute, EGLint *value);
+  bool SurfaceAttrib(EGLDisplay display, EGLSurface surface, EGLint  attribute, EGLint  value);
 
 private:
     CEGLNativeType          *m_nativeTypes;
