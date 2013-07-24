@@ -49,6 +49,7 @@ public:
   void Deinitialize();
   int GetArmMem() { return m_arm_mem; }
   int GetGpuMem() { return m_gpu_mem; }
+  unsigned char *Screenshot(int &width, int &height, int &stride);
 
 private:
   DllBcmHost *m_DllBcmHost;

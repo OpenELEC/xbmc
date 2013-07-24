@@ -70,6 +70,49 @@ void CRBP::LogFirmwareVerison()
   CLog::Log(LOGNOTICE, "ARM mem: %dMB GPU mem: %dMB", m_arm_mem, m_gpu_mem);
 }
 
+unsigned char *CRBP::Screenshot(int &width, int &height, int &stride)
+{
+  DISPMANX_DISPLAY_HANDLE_T display;
+  DISPMANX_MODEINFO_T info;
+  DISPMANX_RESOURCE_HANDLE_T resource;
+  VC_RECT_T rect;
+  unsigned char *image = NULL;
+  uint32_t vc_image_ptr;
+
+  display = vc_dispmanx_display_open( 0 /*screen*/ );
+  if (vc_dispmanx_display_get_info(display, &info) == 0)
+  {
+    width = info.width;
+    height = info.height;
+    stride = ((info.width + 15) & ~15) * 4;
+    image = new unsigned char [height * stride];
+  }
+  if (image)
+  {
+    resource = vc_dispmanx_resource_create( VC_IMAGE_RGBA32, width, height, &vc_image_ptr );
+
+    vc_dispmanx_snapshot(display, resource, VC_IMAGE_ROT0);
+
+    vc_dispmanx_rect_set(&rect, 0, 0, width, height);
+    vc_dispmanx_resource_read_data(resource, &rect, image, stride);
+    vc_dispmanx_resource_delete( resource );
+
+    for (int y = 0; y < height; y++)
+    {
+      // we need to save in BGRA order so Swap RGBA -> BGRA
+      unsigned char *p = image + y * stride;
+      for (int x = 0; x < width; x++, p+=4)
+      {
+        unsigned char t = p[0];
+        p[0] = p[2];
+        p[2] = t;
+      }
+    }
+  }
+  vc_dispmanx_display_close(display );
+  return image;
+}
+
 void CRBP::Deinitialize()
 {
   if(m_omx_initialized)
