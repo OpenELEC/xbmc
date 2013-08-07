@@ -21,7 +21,9 @@
 #ifdef HAVE_LIBVA
 #include "windowing/WindowingFactory.h"
 #include "settings/Settings.h"
+#include "cores/dvdplayer/DVDClock.h"
 #include "VAAPI.h"
+#include "VAAPI_VPP.h"
 #include "DVDVideoCodec.h"
 #include <boost/scoped_array.hpp>
 #include <boost/weak_ptr.hpp>
@@ -66,7 +68,7 @@ static int compare_version(int major_l, int minor_l, int micro_l, int major_r, i
 static void RelBufferS(AVCodecContext *avctx, AVFrame *pic)
 { ((CDecoder*)((CDVDVideoCodecFFmpeg*)avctx->opaque)->GetHardware())->RelBuffer(avctx, pic); }
 
-static int GetBufferS(AVCodecContext *avctx, AVFrame *pic) 
+static int GetBufferS(AVCodecContext *avctx, AVFrame *pic)
 {  return ((CDecoder*)((CDVDVideoCodecFFmpeg*)avctx->opaque)->GetHardware())->GetBuffer(avctx, pic); }
 
 static inline VASurfaceID GetSurfaceID(AVFrame *pic)
@@ -83,7 +85,7 @@ static CDisplayPtr GetGlobalDisplay()
     {
       CLog::Log(LOGERROR, "VAAPI - vaapi display is in lost state");
       display.reset();
-    }    
+    }
     return display;
   }
 
@@ -143,10 +145,14 @@ CSurfaceGL::~CSurfaceGL()
 
 CDecoder::CDecoder()
 {
+  // Buffer size passed to VPP Init
+  m_buffer_size     = 9;
+
   m_refs            = 0;
   m_surfaces_count  = 0;
   m_config          = 0;
   m_context         = 0;
+  m_vppth           = 0;
   m_hwaccel         = (vaapi_context*)calloc(1, sizeof(vaapi_context));
   memset(m_surfaces, 0, sizeof(*m_surfaces));
 }
@@ -161,8 +167,8 @@ void CDecoder::RelBuffer(AVCodecContext *avctx, AVFrame *pic)
 {
   VASurfaceID surface = GetSurfaceID(pic);
 
-  for(std::list<CSurfacePtr>::iterator it = m_surfaces_used.begin(); it != m_surfaces_used.end(); it++)
-  {    
+  for(std::list<CSurfacePtr>::iterator it = m_surfaces_used.begin(); it != m_surfaces_used.end(); ++it)
+  {
     if((*it)->m_id == surface)
     {
       m_surfaces_free.push_back(*it);
@@ -197,19 +203,19 @@ int CDecoder::GetBuffer(AVCodecContext *avctx, AVFrame *pic)
     if(!wrapper)
     {
       CLog::Log(LOGERROR, "VAAPI - unable to find requested surface");
-      return -1; 
+      return -1;
     }
   }
   else
   {
     // To avoid stutter, we scan the free surface pool (provided by decoder) for surfaces
-    // that are 100% not in use by renderer. The pointers to these surfaces have a use_count of 1.
-    for (; it != m_surfaces_free.end() && it->use_count() > 1; it++) {}
+    // that are 100% not in use by renderer or vpp. The pointers to these surfaces are unique(use_count() == 1).
+    for (; it != m_surfaces_free.end() && !it->unique(); ++it) {}
 
     // If we have zero free surface from decoder OR all free surfaces are in use by renderer, we allocate a new surface
     if (it == m_surfaces_free.end())
     {
-      if (!m_surfaces_free.empty()) CLog::Log(LOGERROR, "VAAPI - renderer still using all freed up surfaces by decoder");
+      if (!m_surfaces_free.empty()) CLog::Log(LOGERROR, "VAAPI - renderer/vpp still using all freed up surfaces by decoder");
       CLog::Log(LOGERROR, "VAAPI - unable to find free surface, trying to allocate a new one");
       if(!EnsureSurfaces(avctx, m_surfaces_count+1) || m_surfaces_free.empty())
       {
@@ -230,7 +236,7 @@ int CDecoder::GetBuffer(AVCodecContext *avctx, AVFrame *pic)
   pic->data[0]        = (uint8_t*)wrapper;
   pic->data[1]        = NULL;
   pic->data[2]        = NULL;
-  pic->data[3]        = (uint8_t*)surface;
+  pic->data[3]        = (uint8_t*)(uintptr_t)surface;
   pic->linesize[0]    = 0;
   pic->linesize[1]    = 0;
   pic->linesize[2]    = 0;
@@ -240,7 +246,11 @@ int CDecoder::GetBuffer(AVCodecContext *avctx, AVFrame *pic)
 }
 
 void CDecoder::Close()
-{ 
+{
+  if(m_vppth)
+    delete m_vppth;
+  m_vppth = 0;
+
   if(m_context)
     WARN(vaDestroyContext(m_display->get(), m_context))
   m_context = 0;
@@ -248,7 +258,7 @@ void CDecoder::Close()
   if(m_config)
     WARN(vaDestroyConfig(m_display->get(), m_config))
   m_config = 0;
-  
+
   m_surfaces_free.clear();
   m_surfaces_used.clear();
   m_surfaces_count = 0;
@@ -292,7 +302,7 @@ bool CDecoder::Open(AVCodecContext *avctx, enum PixelFormat fmt, unsigned int su
       else
       {
         if(avctx->profile == FF_PROFILE_H264_MAIN)
-          accepted.push_back(VAProfileH264Main); 
+          accepted.push_back(VAProfileH264Main);
 #else
       {
         // fallback to high profile if libavcodec is too old to export
@@ -367,8 +377,14 @@ bool CDecoder::Open(AVCodecContext *avctx, enum PixelFormat fmt, unsigned int su
   m_config = m_hwaccel->config_id;
 
   m_renderbuffers_count = surfaces;
+
+  m_vppth = new CVPPThread(m_display, avctx->width, avctx->height);
+
   if (!EnsureContext(avctx))
     return false;
+
+  m_vppth->Init(m_buffer_size); // Ignore result, VPPThread just passes frames if init failed
+  m_vppth->Start();
 
   m_hwaccel->display     = m_display->get();
 
@@ -398,7 +414,12 @@ bool CDecoder::EnsureContext(AVCodecContext *avctx)
     else
       m_refs = 2;
   }
-  return EnsureSurfaces(avctx, m_refs + m_renderbuffers_count + 1);
+
+  int vpp_buf = 0;
+  if(m_vppth && m_vppth->getVPP() && m_vppth->getVPP()->VppSupported())
+    vpp_buf = m_buffer_size / 2 + 4;
+
+  return EnsureSurfaces(avctx, m_refs + vpp_buf + m_renderbuffers_count + 1);
 }
 
 bool CDecoder::EnsureSurfaces(AVCodecContext *avctx, unsigned n_surfaces_count)
@@ -448,46 +469,75 @@ int CDecoder::Decode(AVCodecContext* avctx, AVFrame* frame)
     return status;
 
   if(frame)
-    return VC_BUFFER | VC_PICTURE;
-  else
-    return VC_BUFFER;
+  {
+    CVPPPicture picture;
+    picture.valid = true;
+
+    memset(&picture.DVDPic, 0, sizeof(picture.DVDPic));
+    ((CDVDVideoCodecFFmpeg*)avctx->opaque)->GetPictureCommon(&picture.DVDPic);
+    VASurfaceID surface = GetSurfaceID(frame);
+
+    std::list<CSurfacePtr>::iterator it;
+    for(it = m_surfaces_used.begin(); it != m_surfaces_used.end() && !m_holder.surface; ++it)
+    {
+      if((*it)->m_id == surface)
+      {
+        picture.surface = *it;
+        break;
+      }
+    }
+
+    for(it = m_surfaces_free.begin(); it != m_surfaces_free.end() && !m_holder.surface; ++it)
+    {
+      if((*it)->m_id == surface)
+      {
+        picture.surface = *it;
+        break;
+      }
+    }
+
+    if(!picture.surface)
+    {
+      CLog::Log(LOGERROR, "VAAPI - Unable to find surface");
+      return VC_ERROR;
+    }
+
+    m_vppth->InsertNewFrame(picture);
+  }
+
+  int ret = 0;
+
+  if(m_vppth->GetInputQueueSize() < (m_buffer_size >> 2) && m_vppth->GetOutputQueueSize() < (m_buffer_size >> 1))
+    ret |= VC_BUFFER;
+  if(m_vppth->GetOutputQueueSize() > 0)
+    ret |= VC_PICTURE;
+
+  return ret;
 }
 
 bool CDecoder::GetPicture(AVCodecContext* avctx, AVFrame* frame, DVDVideoPicture* picture)
 {
-  ((CDVDVideoCodecFFmpeg*)avctx->opaque)->GetPictureCommon(picture);
-  VASurfaceID surface = GetSurfaceID(frame);
-
-
   m_holder.surface.reset();
 
-  std::list<CSurfacePtr>::iterator it;
-  for(it = m_surfaces_used.begin(); it != m_surfaces_used.end() && !m_holder.surface; it++)
-  {    
-    if((*it)->m_id == surface)
-    {
-      m_holder.surface = *it;
-      break;
-    }
-  }
-
-  for(it = m_surfaces_free.begin(); it != m_surfaces_free.end() && !m_holder.surface; it++)
-  {    
-    if((*it)->m_id == surface)
-    {
-      m_holder.surface = *it;
-      break;
-    }
-  }
-  if(!m_holder.surface)
+  CVPPPicture outPic = m_vppth->GetOutputPicture();
+  if(!outPic.valid)
   {
-    CLog::Log(LOGERROR, "VAAPI - Unable to find surface");
+    CLog::Log(LOGERROR, "VAAPI - Got an invalid render picture");
     return false;
   }
 
+  m_holder.surface = outPic.surface;
+  *picture = outPic.DVDPic;
+
   picture->format = RENDER_FMT_VAAPI;
   picture->vaapi  = &m_holder;
+
   return true;
+}
+
+void CDecoder::Reset()
+{
+  m_vppth->Flush();
 }
 
 int CDecoder::Check(AVCodecContext* avctx)
@@ -519,6 +569,234 @@ int CDecoder::Check(AVCodecContext* avctx)
 
   m_holder.surface.reset();
   return 0;
+}
+
+
+CVPPThread::CVPPThread(CDisplayPtr& display, int width, int height)
+  :CThread("VAAPI VPP Thread")
+  ,m_stop(false)
+  ,m_can_skip_deint(false)
+{
+  m_vpp = CVPPPtr(new CVPP(display, width, height));
+}
+
+CVPPThread::~CVPPThread()
+{
+  Dispose();
+}
+
+bool CVPPThread::Init(int num_refs)
+{
+  if(!m_vpp->InitVpp())
+    return false;
+
+  bool res = false;
+  for(int i = CVPP::Deinterlacing_Count - 1; i >= 0; --i)
+  {
+      if(m_vpp->DeintSupported((CVPP::DeintMethod)i))
+        res = m_vpp->InitDeint((CVPP::DeintMethod)i, num_refs);
+
+      if(res)
+          break;
+  }
+
+  return res;
+}
+
+void CVPPThread::Start()
+{
+  m_stop = false;
+  Create();
+}
+
+void CVPPThread::Dispose()
+{
+  m_stop = true;
+  m_input_cond.notifyAll();
+  StopThread();
+
+  m_input_queue = std::queue<CVPPPicture>();
+  m_output_queue = std::queue<CVPPPicture>();
+
+  m_vpp->deinit();
+  m_vpp.reset();
+}
+
+void CVPPThread::OnStartup()
+{
+  CLog::Log(LOGDEBUG, "VAAPI - VPP thread on startup");
+}
+
+void CVPPThread::OnExit()
+{
+  CLog::Log(LOGDEBUG, "VAAPI - VPP thread on exit");
+}
+
+void CVPPThread::InsertNewFrame(CVPPPicture &new_frame)
+{
+  if(!IsRunning())
+    return;
+
+  CSingleLock lock(m_input_queue_lock);
+
+  m_input_queue.push(new_frame);
+  m_input_cond.notify();
+}
+
+CVPPPicture CVPPThread::GetOutputPicture()
+{
+  CVPPPicture res = CVPPPicture();
+
+  if(!IsRunning())
+    return res;
+
+  CSingleLock lock(m_output_queue_lock);
+
+  if(!m_output_queue.empty())
+  {
+    res = m_output_queue.front();
+    m_output_queue.pop();
+  }
+
+  return res;
+}
+
+CVPPPicture CVPPThread::GetCurrentFrame()
+{
+  CVPPPicture res = CVPPPicture();
+
+  if(m_stop)
+    return res;
+
+  CSingleLock lock(m_input_queue_lock);
+
+  if(m_input_queue.empty())
+    m_input_cond.wait(m_input_queue_lock);
+
+  if(!m_input_queue.empty())
+  {
+    res = m_input_queue.front();
+    m_input_queue.pop();
+  }
+
+  return res;
+}
+
+void CVPPThread::InsertOutputFrame(CVPPPicture &new_frame)
+{
+  CSingleLock lock(m_output_queue_lock);
+
+  m_output_queue.push(new_frame);
+}
+
+int CVPPThread::GetInputQueueSize()
+{
+  CSingleLock lock(m_input_queue_lock);
+
+  return m_input_queue.size();
+}
+
+int CVPPThread::GetOutputQueueSize()
+{
+  CSingleLock lock(m_output_queue_lock);
+
+  return m_output_queue.size();
+}
+
+void CVPPThread::Flush()
+{
+  CSingleLock lock(m_work_lock);
+
+  m_input_queue_lock.lock();
+  m_input_queue = std::queue<CVPPPicture>();
+  m_input_queue_lock.unlock();
+
+  m_output_queue_lock.lock();
+  m_output_queue = std::queue<CVPPPicture>();
+  m_output_queue_lock.unlock();
+}
+
+void CVPPThread::DoDeinterlacing(const CVPPPicture &frame, int topField)
+{
+  if(!m_vpp->DeintReady())
+    return;
+
+  CVPPPicture res = m_vpp->DoDeint(frame, topField);
+  if(!res.valid)
+    return;
+
+  res.DVDPic.iFlags &= ~(DVP_FLAG_TOP_FIELD_FIRST | DVP_FLAG_REPEAT_TOP_FIELD | DVP_FLAG_INTERLACED);
+
+  if(m_vpp->getUsedMethod() == CVPP::DeinterlacingBob)
+  {
+      if( ((frame.DVDPic.iFlags & DVP_FLAG_TOP_FIELD_FIRST) && !topField)
+       || (!(frame.DVDPic.iFlags & DVP_FLAG_TOP_FIELD_FIRST) && topField) )
+      {
+        res.DVDPic.pts = DVD_NOPTS_VALUE;
+        res.DVDPic.dts = DVD_NOPTS_VALUE;
+      }
+      res.DVDPic.iRepeatPicture = 0.0;
+  }
+
+  InsertOutputFrame(res);
+}
+
+void CVPPThread::Process()
+{
+  CVPPPicture currentFrame = CVPPPicture();
+
+  m_work_lock.lock();
+
+  while(!m_stop)
+  {
+    if(currentFrame.valid)
+    {
+      bool isInterlaced = currentFrame.DVDPic.iFlags & DVP_FLAG_INTERLACED;
+
+      bool skipDeint = false;
+      //if(currentFrame.DVDPic.iFlags & DVP_FLAG_DROPDEINT)
+      //  skipDeint = true;
+
+      EDEINTERLACEMODE   mode = g_settings.m_currentVideoSettings.m_DeinterlaceMode;
+      EINTERLACEMETHOD method = g_settings.m_currentVideoSettings.m_InterlaceMethod;
+
+      bool doDeint = m_vpp->DeintReady()
+                  && (method == VS_INTERLACEMETHOD_VAAPI_AUTO || method == VS_INTERLACEMETHOD_AUTO)
+                  && (mode   == VS_DEINTERLACEMODE_FORCE      || (mode == VS_DEINTERLACEMODE_AUTO && isInterlaced));
+
+      m_can_skip_deint = doDeint;
+
+      if(doDeint && !skipDeint)
+      {
+        if(m_vpp->getUsedMethod() == CVPP::DeinterlacingBob)
+        {
+          bool topField = currentFrame.DVDPic.iFlags & DVP_FLAG_TOP_FIELD_FIRST;
+          DoDeinterlacing(currentFrame, topField?1:0);
+          DoDeinterlacing(currentFrame, topField?0:1);
+        }
+        else
+        {
+          DoDeinterlacing(currentFrame);
+        }
+      }
+      else
+      {
+        CVPPPicture res;
+        res.valid = true;
+        res.DVDPic = currentFrame.DVDPic;
+        res.surface = currentFrame.surface;
+        InsertOutputFrame(res);
+      }
+    }
+
+    currentFrame = CVPPPicture();
+
+    m_work_lock.unlock();
+    currentFrame = GetCurrentFrame();
+    m_work_lock.lock();
+  }
+
+  m_work_lock.unlock();
 }
 
 #endif

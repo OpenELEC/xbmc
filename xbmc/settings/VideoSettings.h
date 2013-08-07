@@ -67,6 +67,8 @@ enum EINTERLACEMETHOD
 
   VS_INTERLACEMETHOD_XVBA = 22,
 
+  VS_INTERLACEMETHOD_VAAPI_AUTO = 23,
+
   VS_INTERLACEMETHOD_MAX // do not use and keep as last enum value.
 };
 
