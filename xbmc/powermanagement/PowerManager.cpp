@@ -207,6 +207,8 @@ void CPowerManager::OnWake()
 {
   CLog::Log(LOGNOTICE, "%s: Running resume jobs", __FUNCTION__);
 
+  WaitForNic();
+
   // reset out timers
   g_application.ResetShutdownTimers();
 
@@ -253,4 +255,26 @@ void CPowerManager::OnLowBattery()
   CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Warning, g_localizeStrings.Get(13050), "");
 
   CAnnouncementManager::Announce(System, "xbmc", "OnLowBattery");
+}
+
+void CPowerManager::WaitForNic()
+{
+    CLog::Log(LOGDEBUG, "%s: Waithing for first NIC to come up", __FUNCTION__);
+
+    const unsigned maxLoopCount = 50u;
+    const unsigned sleepTimeMs = 200u;
+
+    for(unsigned i=0; i < maxLoopCount; ++i)
+    {
+        CNetworkInterface* pIface = g_application.getNetwork().GetFirstConnectedInterface();
+        if (pIface && pIface->IsEnabled() && pIface->IsConnected())
+        {
+            CLog::Log(LOGDEBUG, "%s: NIC is up after waiting %d ms", __FUNCTION__, i * sleepTimeMs);
+            return;
+        }
+
+        Sleep(sleepTimeMs);
+    }
+
+    CLog::Log(LOGDEBUG, "%s: NIC did not come up within %d ms... Lets give up...", __FUNCTION__, maxLoopCount * sleepTimeMs);
 }
