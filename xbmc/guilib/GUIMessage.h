@@ -132,6 +132,13 @@
 
 #define GUI_MSG_SET_TEXT        42
 
+/*!
+ \brief Signal a window that the system is going to suspend or has just woke up
+ */
+#define GUI_MSG_SLEEP         43
+
+#define GUI_MSG_WAKE          44
+
 #define GUI_MSG_USER         1000
 
 /*!
