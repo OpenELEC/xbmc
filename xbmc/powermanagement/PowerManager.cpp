@@ -32,6 +32,7 @@
 #include "guilib/LocalizeStrings.h"
 #include "guilib/GraphicContext.h"
 #include "dialogs/GUIDialogKaiToast.h"
+#include "guilib/GUIWindowManager.h"
 
 #ifdef HAS_LCD
 #include "utils/LCDFactory.h"
@@ -201,11 +202,15 @@ void CPowerManager::OnSleep()
   g_application.StopPlaying();
   g_application.StopShutdownTimer();
   g_application.StopScreenSaverTimer();
+
+  g_windowManager.OnSleep();
 }
 
 void CPowerManager::OnWake()
 {
   CLog::Log(LOGNOTICE, "%s: Running resume jobs", __FUNCTION__);
+
+  g_windowManager.OnWake();
 
   // reset out timers
   g_application.ResetShutdownTimers();

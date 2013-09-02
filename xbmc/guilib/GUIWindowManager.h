@@ -130,6 +130,9 @@ public:
 #ifdef _DEBUG
   void DumpTextureUse();
 #endif
+  void OnSleep();
+  void OnWake();
+
 private:
   void RenderPass();
 
