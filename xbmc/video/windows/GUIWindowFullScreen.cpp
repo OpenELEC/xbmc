@@ -51,6 +51,7 @@
 #include "threads/SingleLock.h"
 #include "utils/log.h"
 #include "utils/TimeUtils.h"
+#include "utils/URIUtils.h"
 #include "XBDateTime.h"
 #include "input/ButtonTranslator.h"
 #include "pvr/PVRManager.h"
@@ -708,13 +709,9 @@ bool CGUIWindowFullScreen::OnMessage(CGUIMessage& message)
       {
         CSingleLock lock (m_fontLock);
 
-        CStdString fontPath = "special://home/media/Fonts/";
-        fontPath += g_guiSettings.GetString("subtitles.font");
+        CStdString fontPath = URIUtils::AddFileToFolder("special://home/media/Fonts/", g_guiSettings.GetString("subtitles.font"));
         if (!XFILE::CFile::Exists(fontPath))
-        {
-          fontPath = "special://xbmc/media/Fonts/";
-          fontPath += g_guiSettings.GetString("subtitles.font");
-        }
+          fontPath = URIUtils::AddFileToFolder("special://xbmc/media/Fonts/", g_guiSettings.GetString("subtitles.font"));
 
         // We scale based on PAL4x3 - this at least ensures all sizing is constant across resolutions.
         RESOLUTION_INFO pal(720, 576, 0);
